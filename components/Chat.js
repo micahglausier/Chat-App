@@ -1,80 +1,94 @@
-import { useState, useEffect } from "react";
-import { StyleSheet, View, Text, KeyboardAvoidingView, Platform } from 'react-native';
-import { GiftedChat, Bubble } from "react-native-gifted-chat";
+import {
+  addDoc,
+  collection,
+  query,
+  onSnapshot,
+  orderBy,
+} from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import { Bubble, GiftedChat } from "react-native-gifted-chat";
+import { StyleSheet, KeyboardAvoidingView } from "react-native";
 
 
-
-const Chat = ({ route, navigation }) => {
-  const { name, color } = route.params;  //Brings name and bg color selected to Chat
+const Chat = ({ route, navigation, db }) => {
+  const { name, backgroundColor, userID } = route.params;
+  console.log(route.params);
   const [messages, setMessages] = useState([]);
 
-  const onSend = (newMessages) => {
-    setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages))
-  }
+  useEffect(() => {
+    const messagesQuery = query(
+      collection(db, "messages"),
+      orderBy("createdAt", "desc")
+    );
 
-  const renderBubble = (props) => {
-    return <Bubble
-      {...props}
-      wrapperStyle={{
-        right: {
-          backgroundColor: "#000"
-        },
-        left: {
-          backgroundColor: "#FFF"
-        }
-      }}
-    />
-  }
+    const unsubscribe = onSnapshot(messagesQuery, (Snapshot) => {
+      const fetchedMessages = Snapshot.docs.map((doc) => {
+        const data = doc.data();
+        const createdAt = new Date(data.createdAt.seconds * 1000);
+        return {
+          ...data,
+          createdAt,
+        };
+      });
+      setMessages(fetchedMessages);
+    });
+
+    return () => unsubscribe();
+  }, [db]);
+
+  const onSend = (newMessages = []) => {
+    const messageToSave = {
+      ...newMessages[0],
+      user: {
+        _id: userID,
+        name: name,
+      },
+    };
+    addDoc(collection(db, "messages"), messageToSave);
+  };
 
   useEffect(() => {
     navigation.setOptions({ title: name });
-  }, []);
-
-  useEffect(() => {
-    setMessages([
-      {
-        _id: 1,
-        text: 'Hello there!',
-        createdAt: new Date(),
-        user: {
-          _id: 2,
-          name: 'React Native',
-          avatar: 'https://placeimg.com/140/140/any',
-        },
-      },
-      {
-        _id: 2,
-        text: 'Welcome to the Chat!',
-        createdAt: new Date(),
-        system: true,
-      },
-
-    ]);
-  }, []);
+  }, [name, navigation]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: color }}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: backgroundColor }}>
       <GiftedChat
         messages={messages}
         renderBubble={renderBubble}
-        onSend={messages => onSend(messages)}
+        onSend={(messages) => onSend(messages)}
         user={{
-          _id: 1
+          _id: userID,
+          name: name,
         }}
       />
-    {Platform.OS === 'android' ? <KeyboardAvoidingView behavior="height" /> : null }
-    {Platform.OS === 'ios' ? <KeyboardAvoidingView behavior="padding" /> : null }
-    </View>
+    </KeyboardAvoidingView>
   );
-}
-
+};
+const renderBubble = (props) => {
+  return (
+    <Bubble
+      {...props}
+      wrapperStyle={{
+        right: {
+          backgroundColor: "#06B",
+        },
+        left: {
+          backgroundColor: "#FFF",
+        },
+      }}
+    />
+  );
+};
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  }
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  text: {
+    color: "#FDDA0D",
+    fontFamily: "Poppins-Regular",
+  },
 });
-
-
 export default Chat;
